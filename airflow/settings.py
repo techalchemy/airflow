@@ -188,22 +188,21 @@ def configure_orm(disable_connection_pool=False):
     reconnect_timeout = conf.getint('core', 'SQL_ALCHEMY_RECONNECT_TIMEOUT')
     setup_event_handlers(engine, reconnect_timeout)
 
-    Session = scoped_session(
+
+def get_session():
+    global engine
+    return scoped_session(
         sessionmaker(autocommit=False,
                      autoflush=False,
                      bind=engine,
-                     expire_on_commit=False))
+                     expire_on_commit=False))()
 
 
 def dispose_orm():
     """ Properly close pooled database connections """
     log.debug("Disposing DB connection pool (PID %s)", os.getpid())
     global engine
-    global Session
 
-    if Session:
-        Session.remove()
-        Session = None
     if engine:
         engine.dispose()
         engine = None

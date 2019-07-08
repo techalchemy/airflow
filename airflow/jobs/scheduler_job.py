@@ -1429,8 +1429,6 @@ class SchedulerJob(BaseJob):
 
         self.executor.end()
 
-        settings.Session.remove()
-
     @provide_session
     def process_file(self, file_path, pickle_dags=False, session=None):
         """

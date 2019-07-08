@@ -42,7 +42,7 @@ from dateutil.relativedelta import relativedelta
 from numpy.testing import assert_array_almost_equal
 from pendulum import utcnow
 
-from airflow import configuration, models
+from airflow import configuration, db, models
 from airflow import jobs, DAG, utils, macros, settings, exceptions
 from airflow.bin import cli
 from airflow.configuration import AirflowConfigException, run_command
@@ -329,28 +329,28 @@ class CoreTest(unittest.TestCase):
         start_date of 2015-01-01, only jobs up to, but not including
         2016-01-01 should be scheduled.
         """
-        session = settings.Session()
-        delta = timedelta(days=1)
-        now = utcnow()
-        start_date = now.subtract(weeks=1)
+        # session = settings.Session()
+        with db.create_session() as session:
+            delta = timedelta(days=1)
+            now = utcnow()
+            start_date = now.subtract(weeks=1)
 
-        runs = (now - start_date).days
+            runs = (now - start_date).days
 
-        dag = DAG(self.TEST_SCHEDULE_DAG_NO_END_DATE_UP_TO_TODAY_ONLY_DAG_ID,
-                  start_date=start_date,
-                  schedule_interval=delta)
-        dag.add_task(BaseOperator(task_id='faketastic', owner='Also fake'))
+            dag = DAG(self.TEST_SCHEDULE_DAG_NO_END_DATE_UP_TO_TODAY_ONLY_DAG_ID,
+                    start_date=start_date,
+                    schedule_interval=delta)
+            dag.add_task(BaseOperator(task_id='faketastic', owner='Also fake'))
 
-        dag_runs = []
-        scheduler = jobs.SchedulerJob(**self.default_scheduler_args)
-        for i in range(runs):
-            dag_run = scheduler.create_dag_run(dag)
-            dag_runs.append(dag_run)
+            dag_runs = []
+            scheduler = jobs.SchedulerJob(**self.default_scheduler_args)
+            for i in range(runs):
+                dag_run = scheduler.create_dag_run(dag)
+                dag_runs.append(dag_run)
 
-            # Mark the DagRun as complete
-            dag_run.state = State.SUCCESS
-            session.merge(dag_run)
-            session.commit()
+                # Mark the DagRun as complete
+                dag_run.state = State.SUCCESS
+                session.merge(dag_run)
 
         # Attempt to schedule an additional dag run (for 2016-01-01)
         additional_dag_run = scheduler.create_dag_run(dag)
@@ -933,25 +933,25 @@ class CoreTest(unittest.TestCase):
         sleep(5)
         settings.engine.dispose()
         session = settings.Session()
-        ti.refresh_from_db(session=session)
-        # making sure it's actually running
-        self.assertEqual(State.RUNNING, ti.state)
-        ti = session.query(TI).filter_by(
-            dag_id=task.dag_id,
-            task_id=task.task_id,
-            execution_date=DEFAULT_DATE
-        ).one()
+        with db.create_session() as session:
+            ti.refresh_from_db(session=session)
+            # making sure it's actually running
+            self.assertEqual(State.RUNNING, ti.state)
+            ti = session.query(TI).filter_by(
+                dag_id=task.dag_id,
+                task_id=task.task_id,
+                execution_date=DEFAULT_DATE
+            ).one()
 
-        # deleting the instance should result in a failure
-        session.delete(ti)
-        session.commit()
+            # deleting the instance should result in a failure
+            session.delete(ti)
+        # session.commit()
         # waiting for the async task to finish
-        p.join()
+            p.join()
 
-        # making sure that the task ended up as failed
-        ti.refresh_from_db(session=session)
+            # making sure that the task ended up as failed
+            ti.refresh_from_db(session=session)
         self.assertEqual(State.FAILED, ti.state)
-        session.close()
 
     def test_task_fail_duration(self):
         """If a task fails, the duration should be recorded in TaskFail"""
@@ -966,23 +966,24 @@ class CoreTest(unittest.TestCase):
             execution_timeout=timedelta(seconds=3),
             retry_delay=timedelta(seconds=0),
             dag=self.dag)
-        session = settings.Session()
-        try:
-            p.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)
-        except Exception:
-            pass
-        try:
-            f.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)
-        except Exception:
-            pass
-        p_fails = session.query(TaskFail).filter_by(
-            task_id='pass_sleepy',
-            dag_id=self.dag.dag_id,
-            execution_date=DEFAULT_DATE).all()
-        f_fails = session.query(TaskFail).filter_by(
-            task_id='fail_sleepy',
-            dag_id=self.dag.dag_id,
-            execution_date=DEFAULT_DATE).all()
+        # session = settings.Session()
+        with db.create_session() as session:
+            try:
+                p.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)
+            except Exception:
+                pass
+            try:
+                f.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)
+            except Exception:
+                pass
+            p_fails = session.query(TaskFail).filter_by(
+                task_id='pass_sleepy',
+                dag_id=self.dag.dag_id,
+                execution_date=DEFAULT_DATE).all()
+            f_fails = session.query(TaskFail).filter_by(
+                task_id='fail_sleepy',
+                dag_id=self.dag.dag_id,
+                execution_date=DEFAULT_DATE).all()
 
         self.assertEqual(0, len(p_fails))
         self.assertEqual(1, len(f_fails))
@@ -1578,30 +1579,31 @@ class CliTests(unittest.TestCase):
         ])
 
         # Prepare to add connections
-        session = settings.Session()
-        extra = {'new1': None,
-                 'new2': None,
-                 'new3': "{'extra': 'yes'}",
-                 'new4': "{'extra': 'yes'}"}
+        # session = settings.Session()
+        with db.create_session() as session:
+            extra = {'new1': None,
+                    'new2': None,
+                    'new3': "{'extra': 'yes'}",
+                    'new4': "{'extra': 'yes'}"}
 
-        # Add connections
-        for index in range(1, 6):
-            conn_id = 'new%s' % index
-            result = (session
-                      .query(Connection)
-                      .filter(Connection.conn_id == conn_id)
-                      .first())
-            result = (result.conn_id, result.conn_type, result.host,
-                      result.port, result.get_extra())
-            if conn_id in ['new1', 'new2', 'new3', 'new4']:
-                self.assertEqual(result, (conn_id, 'postgres', 'host', 5432,
-                                          extra[conn_id]))
-            elif conn_id == 'new5':
-                self.assertEqual(result, (conn_id, 'hive_metastore', 'host',
-                                          9083, None))
-            elif conn_id == 'new6':
-                self.assertEqual(result, (conn_id, 'google_cloud_platform',
-                                          None, None, "{'extra': 'yes'}"))
+            # Add connections
+            for index in range(1, 6):
+                conn_id = 'new%s' % index
+                result = (session
+                        .query(Connection)
+                        .filter(Connection.conn_id == conn_id)
+                        .first())
+                result = (result.conn_id, result.conn_type, result.host,
+                        result.port, result.get_extra())
+                if conn_id in ['new1', 'new2', 'new3', 'new4']:
+                    self.assertEqual(result, (conn_id, 'postgres', 'host', 5432,
+                                            extra[conn_id]))
+                elif conn_id == 'new5':
+                    self.assertEqual(result, (conn_id, 'hive_metastore', 'host',
+                                            9083, None))
+                elif conn_id == 'new6':
+                    self.assertEqual(result, (conn_id, 'google_cloud_platform',
+                                            None, None, "{'extra': 'yes'}"))
 
         # Delete connections
         with mock.patch('sys.stdout',
@@ -1758,20 +1760,21 @@ class CliTests(unittest.TestCase):
     def test_delete_dag(self):
         DM = DagModel
         key = "my_dag_id"
-        session = settings.Session()
-        session.add(DM(dag_id=key))
-        session.commit()
-        cli.delete_dag(self.parser.parse_args([
-            'delete_dag', key, '--yes']))
-        self.assertEqual(session.query(DM).filter_by(dag_id=key).count(), 0)
-        self.assertRaises(
-            AirflowException,
-            cli.delete_dag,
-            self.parser.parse_args([
-                'delete_dag',
-                'does_not_exist_dag',
-                '--yes'])
-        )
+        # session = settings.Session()
+        with db.create_session() as session:
+            session.add(DM(dag_id=key))
+            session.commit()
+            cli.delete_dag(self.parser.parse_args([
+                'delete_dag', key, '--yes']))
+            self.assertEqual(session.query(DM).filter_by(dag_id=key).count(), 0)
+            self.assertRaises(
+                AirflowException,
+                cli.delete_dag,
+                self.parser.parse_args([
+                    'delete_dag',
+                    'does_not_exist_dag',
+                    '--yes'])
+            )
 
     def test_pool_create(self):
         cli.pool(self.parser.parse_args(['pool', '-s', 'foo', '1', 'test']))
