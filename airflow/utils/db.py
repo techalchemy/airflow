@@ -34,7 +34,7 @@ def create_session():
     """
     Contextmanager that will create and teardown a session.
     """
-    session = settings.Session()
+    session = settings.get_session()
     try:
         yield session
         session.commit()
