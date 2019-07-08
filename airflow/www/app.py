@@ -169,7 +169,7 @@ def create_app(config=None, testing=False):
 
         @app.teardown_appcontext
         def shutdown_session(exception=None):
-            settings.Session.remove()
+            pass
 
         return app
 

@@ -21,7 +21,7 @@ import logging
 import pandas as pd
 import sys
 
-from airflow import configuration, settings
+from airflow import configuration, db, settings
 from airflow.jobs import SchedulerJob
 from airflow.models import DagBag, DagModel, DagRun, TaskInstance
 from airflow.utils import timezone
@@ -66,56 +66,56 @@ class SchedulerMetricsJob(SchedulerJob):
         """
         Print operational metrics for the scheduler test.
         """
-        session = settings.Session()
-        TI = TaskInstance
-        tis = (
-            session
-            .query(TI)
-            .filter(TI.dag_id.in_(DAG_IDS))
-            .all()
-        )
-        successful_tis = [x for x in tis if x.state == State.SUCCESS]
-        ti_perf = [(ti.dag_id, ti.task_id, ti.execution_date,
-                    (ti.queued_dttm - self.start_date).total_seconds(),
-                    (ti.start_date - self.start_date).total_seconds(),
-                    (ti.end_date - self.start_date).total_seconds(),
-                    ti.duration) for ti in successful_tis]
-        ti_perf_df = pd.DataFrame(ti_perf, columns=['dag_id', 'task_id',
+        with db.create_session() as session:
+            TI = TaskInstance
+            tis = (
+                session
+                .query(TI)
+                .filter(TI.dag_id.in_(DAG_IDS))
+                .all()
+            )
+            successful_tis = [x for x in tis if x.state == State.SUCCESS]
+            ti_perf = [(ti.dag_id, ti.task_id, ti.execution_date,
+                        (ti.queued_dttm - self.start_date).total_seconds(),
+                        (ti.start_date - self.start_date).total_seconds(),
+                        (ti.end_date - self.start_date).total_seconds(),
+                        ti.duration) for ti in successful_tis]
+            ti_perf_df = pd.DataFrame(ti_perf, columns=['dag_id', 'task_id',
                                                     'execution_date',
                                                     'queue_delay',
                                                     'start_delay', 'land_time',
                                                     'duration'])
 
-        print('Performance Results')
-        print('###################')
-        for dag_id in DAG_IDS:
-            print('DAG {}'.format(dag_id))
-            print(ti_perf_df[ti_perf_df['dag_id'] == dag_id])
-        print('###################')
-        if len(tis) > len(successful_tis):
-            print("WARNING!! The following task instances haven't completed")
-            print(pd.DataFrame([(ti.dag_id, ti.task_id, ti.execution_date, ti.state)
-                  for ti in filter(lambda x: x.state != State.SUCCESS, tis)],
-                  columns=['dag_id', 'task_id', 'execution_date', 'state']))
+            print('Performance Results')
+            print('###################')
+            for dag_id in DAG_IDS:
+                print('DAG {}'.format(dag_id))
+                print(ti_perf_df[ti_perf_df['dag_id'] == dag_id])
+            print('###################')
+            if len(tis) > len(successful_tis):
+                print("WARNING!! The following task instances haven't completed")
+                print(pd.DataFrame([(ti.dag_id, ti.task_id, ti.execution_date, ti.state)
+                    for ti in filter(lambda x: x.state != State.SUCCESS, tis)],
+                    columns=['dag_id', 'task_id', 'execution_date', 'state']))
 
-        session.commit()
+        # session.commit()
 
     def heartbeat(self):
         """
         Override the scheduler heartbeat to determine when the test is complete
         """
         super(SchedulerMetricsJob, self).heartbeat()
-        session = settings.Session()
-        # Get all the relevant task instances
-        TI = TaskInstance
-        successful_tis = (
-            session
-            .query(TI)
-            .filter(TI.dag_id.in_(DAG_IDS))
-            .filter(TI.state.in_([State.SUCCESS]))
-            .all()
-        )
-        session.commit()
+        with db.create_session() as session:
+            # Get all the relevant task instances
+            TI = TaskInstance
+            successful_tis = (
+                session
+                .query(TI)
+                .filter(TI.dag_id.in_(DAG_IDS))
+                .filter(TI.state.in_([State.SUCCESS]))
+                .all()
+            )
+        # session.commit()
 
         dagbag = DagBag(SUBDIR)
         dags = [dagbag.dags[dag_id] for dag_id in DAG_IDS]
@@ -139,44 +139,44 @@ def clear_dag_runs():
     """
     Remove any existing DAG runs for the perf test DAGs.
     """
-    session = settings.Session()
-    drs = session.query(DagRun).filter(
-        DagRun.dag_id.in_(DAG_IDS),
-    ).all()
-    for dr in drs:
-        logging.info('Deleting DagRun :: {}'.format(dr))
-        session.delete(dr)
+    # session = settings.Session()
+    with db.create_session() as session:
+		drs = session.query(DagRun).filter(
+		    DagRun.dag_id.in_(DAG_IDS),
+		).all()
+		for dr in drs:
+		    logging.info('Deleting DagRun :: %s', dr)
+		    session.delete(dr)
 
 
 def clear_dag_task_instances():
     """
     Remove any existing task instances for the perf test DAGs.
     """
-    session = settings.Session()
-    TI = TaskInstance
-    tis = (
-        session
-        .query(TI)
-        .filter(TI.dag_id.in_(DAG_IDS))
-        .all()
-    )
-    for ti in tis:
-        logging.info('Deleting TaskInstance :: {}'.format(ti))
-        session.delete(ti)
-    session.commit()
+    with db.create_session() as session:
+		TI = TaskInstance
+		tis = (
+		    session
+		    .query(TI)
+		    .filter(TI.dag_id.in_(DAG_IDS))
+		    .all()
+		)
+		for ti in tis:
+		    logging.info('Deleting TaskInstance :: %s', ti)
+		    session.delete(ti)
 
 
 def set_dags_paused_state(is_paused):
     """
     Toggle the pause state of the DAGs in the test.
     """
-    session = settings.Session()
-    dms = session.query(DagModel).filter(
-        DagModel.dag_id.in_(DAG_IDS))
-    for dm in dms:
-        logging.info('Setting DAG :: {} is_paused={}'.format(dm, is_paused))
-        dm.is_paused = is_paused
-    session.commit()
+    with db.create_session() as session:
+		dms = session.query(DagModel).filter(
+		    DagModel.dag_id.in_(DAG_IDS))
+		for dm in dms:
+		    logging.info('Setting DAG :: %s is_paused=%s', dm, is_paused)
+		    dm.is_paused = is_paused
+		session.commit()
 
 
 def main():

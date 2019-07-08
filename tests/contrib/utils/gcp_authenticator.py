@@ -20,7 +20,7 @@ import json
 import os
 import subprocess
 
-from airflow import settings, AirflowException
+from airflow import db, settings, AirflowException
 from tests.contrib.utils.logging_command_executor import LoggingCommandExecutor
 
 from airflow.models import Connection
@@ -81,8 +81,7 @@ class GcpAuthenticator(LoggingCommandExecutor):
         key path
         :return: None
         """
-        session = settings.Session()
-        try:
+        with db.create_session() as session:
             conn = session.query(Connection).filter(Connection.conn_id == 'google_cloud_default')[0]
             extras = conn.extra_dejson
             extras[KEYPATH_EXTRA] = self.full_key_path
@@ -91,13 +90,6 @@ class GcpAuthenticator(LoggingCommandExecutor):
             extras[SCOPE_EXTRA] = 'https://www.googleapis.com/auth/cloud-platform'
             extras[PROJECT_EXTRA] = self.project_extra if self.project_extra else self.project_id
             conn.extra = json.dumps(extras)
-            session.commit()
-        except BaseException as ex:
-            self.log.info('Airflow DB Session error:' + str(ex))
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def set_dictionary_in_airflow_connection(self):
         """
@@ -105,8 +97,7 @@ class GcpAuthenticator(LoggingCommandExecutor):
         of the json service account file.
         :return: None
         """
-        session = settings.Session()
-        try:
+        with db.create_session() as session:
             conn = session.query(Connection).filter(Connection.conn_id == 'google_cloud_default')[0]
             extras = conn.extra_dejson
             with open(self.full_key_path, "r") as path_file:
@@ -117,13 +108,6 @@ class GcpAuthenticator(LoggingCommandExecutor):
             extras[SCOPE_EXTRA] = 'https://www.googleapis.com/auth/cloud-platform'
             extras[PROJECT_EXTRA] = self.project_extra
             conn.extra = json.dumps(extras)
-            session.commit()
-        except BaseException as ex:
-            self.log.info('Airflow DB Session error:' + str(ex))
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def _set_key_path(self):
         """
