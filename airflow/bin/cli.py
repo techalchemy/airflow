@@ -51,7 +51,7 @@ from urllib.parse import urlunparse
 from typing import Any
 
 import airflow
-from airflow import api, db
+from airflow import api
 from airflow import jobs, settings
 from airflow import configuration as conf
 from airflow.exceptions import AirflowException, AirflowWebServerTimeout

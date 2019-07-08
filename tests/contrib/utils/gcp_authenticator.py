@@ -20,7 +20,8 @@ import json
 import os
 import subprocess
 
-from airflow import db, settings, AirflowException
+from airflow import settings, AirflowException
+from airflow.utils import db
 from tests.contrib.utils.logging_command_executor import LoggingCommandExecutor
 
 from airflow.models import Connection

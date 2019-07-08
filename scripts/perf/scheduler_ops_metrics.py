@@ -21,10 +21,10 @@ import logging
 import pandas as pd
 import sys
 
-from airflow import configuration, db, settings
+from airflow import configuration, settings
 from airflow.jobs import SchedulerJob
 from airflow.models import DagBag, DagModel, DagRun, TaskInstance
-from airflow.utils import timezone
+from airflow.utils import db, timezone
 from airflow.utils.state import State
 
 SUBDIR = 'scripts/perf/dags'
