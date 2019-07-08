@@ -214,6 +214,8 @@ def configure_orm(disable_connection_pool=False):
         engine_args['pool_size'] = pool_size
         engine_args['pool_recycle'] = pool_recycle
         engine_args['max_overflow'] = max_overflow
+        engine_args['pool_pre_ping'] = True
+        engine_args['pool_use_lifo'] = True
 
     # Allow the user to specify an encoding for their DB otherwise default
     # to utf-8 so jobs & users with non-latin1 characters can still use
