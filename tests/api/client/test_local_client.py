@@ -42,7 +42,7 @@ class TestLocalClient(unittest.TestCase):
         super(TestLocalClient, self).setUp()
         clear_db_pools()
         self.client = Client(api_base_url=None, auth=None)
-        self.session = settings.Session()
+        self.session = settings.get_session()
 
     def tearDown(self):
         self.session.query(models.Pool).delete()

@@ -202,7 +202,7 @@ def create_app(config=None, session=None, testing=False, app_name="Airflow"):
 
         @app.teardown_appcontext
         def shutdown_session(exception=None):
-            settings.Session.remove()
+            pass
 
     return app, appbuilder
 
