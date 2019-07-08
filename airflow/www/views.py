@@ -542,28 +542,28 @@ class Airflow(AirflowViewMixin, BaseView):
             embed = request.args.get('embed')
             chart = session.query(models.Chart).filter_by(id=chart_id).first()
 
-        NVd3ChartClass = chart_mapping.get(chart.chart_type)
-        if not NVd3ChartClass:
-            flash(
-                "Not supported anymore as the license was incompatible, "
-                "sorry",
-                "danger")
-            redirect('/admin/chart/')
+            NVd3ChartClass = chart_mapping.get(chart.chart_type)
+            if not NVd3ChartClass:
+                flash(
+                    "Not supported anymore as the license was incompatible, "
+                    "sorry",
+                    "danger")
+                redirect('/admin/chart/')
 
-        sql = ""
-        if chart.show_sql:
-            sql = Markup(highlight(
-                chart.sql,
-                lexers.SqlLexer(),  # Lexer call
-                HtmlFormatter(noclasses=True))
-            )
-        return self.render(
-            'airflow/nvd3.html',
-            chart=chart,
-            title="Airflow - Chart",
-            sql=sql,
-            label=chart.label,
-            embed=embed)
+            sql = ""
+            if chart.show_sql:
+                sql = Markup(highlight(
+                    chart.sql,
+                    lexers.SqlLexer(),  # Lexer call
+                    HtmlFormatter(noclasses=True))
+                )
+            return self.render(
+                'airflow/nvd3.html',
+                chart=chart,
+                title="Airflow - Chart",
+                sql=sql,
+                label=chart.label,
+                embed=embed)
 
     @expose('/dag_stats')
     @login_required
@@ -2111,7 +2111,6 @@ class Airflow(AirflowViewMixin, BaseView):
                     with create_session() as session:
                         var = models.Variable(key=form, val=json.dumps(data))
                         session.add(var)
-                        session.commit()
                 return ""
             else:
                 return self.render(
@@ -2331,6 +2330,10 @@ class AirflowModelView(AirflowViewMixin, ModelView):
     create_template = 'airflow/model_create.html'
     column_display_actions = True
     page_size = PAGE_SIZE
+
+    @property
+    def session(self):
+        return conf.get_session()
 
 
 class ModelViewOnly(wwwutils.LoginMixin, AirflowModelView):
