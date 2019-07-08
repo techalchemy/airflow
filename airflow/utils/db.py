@@ -69,9 +69,9 @@ def provide_session(func):
         if session_in_kwargs or session_in_args:
             return func(*args, **kwargs)
         else:
-            with create_session() as session:
-                kwargs[arg_session] = session
-                return func(*args, **kwargs)
+            session = settings.get_session()
+            kwargs[arg_session] = session
+            return func(*args, **kwargs)
 
     return wrapper
 

@@ -270,7 +270,6 @@ def action_logging(f):
 
         with create_session() as session:
             session.add(log)
-            session.commit()
 
         return f(*args, **kwargs)
 
