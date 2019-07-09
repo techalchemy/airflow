@@ -39,6 +39,8 @@ def create_session():
     """
     Contextmanager that will create and teardown a session.
     """
+    if not settings.Session:
+        settings.configure_orm()
     session = settings.Session()
     try:
         yield session
@@ -99,6 +101,8 @@ def add_default_pool_if_not_exists(session=None):
 
 
 def initdb(rbac=False):
+    if not settings.Session:
+        settings.configure_orm()
     session = settings.Session()
 
     from airflow import models

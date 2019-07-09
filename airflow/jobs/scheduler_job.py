@@ -1461,8 +1461,8 @@ class SchedulerJob(BaseJob):
             models.DAG.deactivate_stale_dags(execute_start_time)
 
         self.executor.end()
-
-        settings.Session.remove()
+        if settings.Session:
+            settings.Session.remove()
 
     @provide_session
     def process_file(self, file_path, zombies, pickle_dags=False, session=None):

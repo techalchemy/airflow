@@ -105,6 +105,8 @@ class SchedulerMetricsJob(SchedulerJob):
         Override the scheduler heartbeat to determine when the test is complete
         """
         super(SchedulerMetricsJob, self).heartbeat()
+        if not settings.Session:
+            settings.configure_orm()
         session = settings.Session()
         # Get all the relevant task instances
         TI = TaskInstance
@@ -139,6 +141,8 @@ def clear_dag_runs():
     """
     Remove any existing DAG runs for the perf test DAGs.
     """
+    if not settings.Session:
+        settings.configure_orm()
     session = settings.Session()
     drs = session.query(DagRun).filter(
         DagRun.dag_id.in_(DAG_IDS),
@@ -152,6 +156,8 @@ def clear_dag_task_instances():
     """
     Remove any existing task instances for the perf test DAGs.
     """
+    if not settings.Session:
+        settings.configure_orm()
     session = settings.Session()
     TI = TaskInstance
     tis = (
@@ -170,6 +176,8 @@ def set_dags_paused_state(is_paused):
     """
     Toggle the pause state of the DAGs in the test.
     """
+    if not settings.Session:
+        settings.configure_orm()
     session = settings.Session()
     dms = session.query(DagModel).filter(
         DagModel.dag_id.in_(DAG_IDS))

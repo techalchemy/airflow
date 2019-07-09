@@ -602,6 +602,8 @@ def next_execution(args):
 
 @cli_utils.action_logging
 def rotate_fernet_key(args):
+    if not settings.Session:
+        settings.configure_orm()
     session = settings.Session()
     for conn in session.query(Connection).filter(
             Connection.is_encrypted | Connection.is_extra_encrypted):

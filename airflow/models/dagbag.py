@@ -31,6 +31,7 @@ from collections import namedtuple
 from datetime import datetime
 
 import six
+import sqlalchemy
 from croniter import croniter, CroniterBadCronError, CroniterBadDateError, CroniterNotAlphaError
 
 from airflow import configuration, settings
@@ -199,6 +200,10 @@ class DagBag(BaseDagBag, LoggingMixin):
                 try:
                     m = imp.load_source(mod_name, filepath)
                     mods.append(m)
+                except sqlalchemy.exc.OperationalError:
+                    self.log.exception("Failed to import: %s", filepath)
+                    self.import_errors[filepath] = str(e)
+                    settings.configure_orm()
                 except Exception as e:
                     self.log.exception("Failed to import: %s", filepath)
                     self.import_errors[filepath] = str(e)
