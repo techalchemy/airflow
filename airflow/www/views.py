@@ -2333,7 +2333,7 @@ class AirflowModelView(AirflowViewMixin, ModelView):
 
     @property
     def session(self):
-        return conf.get_session()
+        return settings.get_session()
 
 
 class ModelViewOnly(wwwutils.LoginMixin, AirflowModelView):
