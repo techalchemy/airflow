@@ -200,7 +200,7 @@ class DagBag(BaseDagBag, LoggingMixin):
                 try:
                     m = imp.load_source(mod_name, filepath)
                     mods.append(m)
-                except sqlalchemy.exc.OperationalError:
+                except sqlalchemy.exc.OperationalError as e:
                     self.log.exception("Failed to import: %s", filepath)
                     self.import_errors[filepath] = str(e)
                     settings.configure_orm()
