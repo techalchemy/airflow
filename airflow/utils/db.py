@@ -35,7 +35,7 @@ log = LoggingMixin().log
 
 
 @contextlib.contextmanager
-def create_session():
+def create_session(commit=True):
     """
     Contextmanager that will create and teardown a session.
     """
@@ -44,7 +44,8 @@ def create_session():
     session = settings.Session()
     try:
         yield session
-        session.commit()
+        if commit:
+            session.commit()
     except Exception:
         session.rollback()
         raise
@@ -52,41 +53,41 @@ def create_session():
         session.close()
 
 
-def provide_session(func):
+def provide_session(commit=True):
     """
     Function decorator that provides a session if it isn't provided.
     If you want to reuse a session or run the function as part of a
     database transaction, you pass it to the function, if not this wrapper
     will create one and close it for you.
     """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        arg_session = 'session'
+    def _provide_session(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            session_arg = 'session'
 
-        func_params = func.__code__.co_varnames
-        session_in_args = arg_session in func_params and \
-            func_params.index(arg_session) < len(args)
-        session_in_kwargs = arg_session in kwargs
-
-        if session_in_kwargs or session_in_args:
-            return func(*args, **kwargs)
-        else:
-            with create_session() as session:
-                kwargs[arg_session] = session
+            func_params = func.__code__.co_varnames
+            session_in_args = (
+                session_arg in func_params and func_params.index(session_arg) > len(args)
+            )
+            if session_in_args or session_arg in kwargs and kwargs[session_arg]:
                 return func(*args, **kwargs)
+            else:
+                with create_session(commit=commit) as session:
+                    kwargs[session_arg] = session
+                    return func(*args, **kwargs)
 
-    return wrapper
+        return wrapper
+    return _provide_session
 
 
-@provide_session
+@provide_session(commit=True)
 def merge_conn(conn, session=None):
     from airflow.models import Connection
     if not session.query(Connection).filter(Connection.conn_id == conn.conn_id).first():
         session.add(conn)
-        session.commit()
 
 
-@provide_session
+@provide_session(commit=True)
 def add_default_pool_if_not_exists(session=None):
     from airflow.models.pool import Pool
     if not Pool.get_pool(Pool.DEFAULT_POOL_NAME, session=session):
@@ -97,7 +98,6 @@ def add_default_pool_if_not_exists(session=None):
             description="Default pool",
         )
         session.add(default_pool)
-        session.commit()
 
 
 def initdb(rbac=False):

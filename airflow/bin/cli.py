@@ -356,7 +356,7 @@ def variables(args):
         export_helper(args.export)
     if not (args.set or args.get or imp or args.export or args.delete):
         # list all variables
-        with db.create_session() as session:
+        with db.create_session(commit=False) as session:
             vars = session.query(Variable)
             msg = "\n".join(var.key for var in vars)
             print(msg)
@@ -387,16 +387,17 @@ def import_helper(filepath):
 
 def export_helper(filepath):
     var_dict = {}
-    with db.create_session() as session:
+    qry = None
+    with db.create_session(commit=False) as session:
         qry = session.query(Variable).all()
 
-        d = json.JSONDecoder()
-        for var in qry:
-            try:
-                val = d.decode(var.val)
-            except Exception:
-                val = var.val
-            var_dict[var.key] = val
+    d = json.JSONDecoder()
+    for var in qry:
+        try:
+            val = d.decode(var.val)
+        except Exception:
+            val = var.val
+        var_dict[var.key] = val
 
     with open(filepath, 'w') as varfile:
         varfile.write(json.dumps(var_dict, sort_keys=True, indent=4))
@@ -442,19 +443,19 @@ def _run(args, dag, ti):
     else:
         pickle_id = None
         if args.ship_dag:
-            try:
+            with db.create_session() as session:
+                try:
                 # Running remotely, so pickling the DAG
-                with db.create_session() as session:
                     pickle = DagPickle(dag)
                     session.add(pickle)
                     pickle_id = pickle.id
                     # TODO: This should be written to a log
                     print('Pickled dag {dag} as pickle_id: {pickle_id}'.format(
                         dag=dag, pickle_id=pickle_id))
-            except Exception as e:
-                print('Could not pickle the DAG')
-                print(e)
-                raise e
+                except Exception as e:
+                    print('Could not pickle the DAG')
+                    print(e)
+                    raise e
 
         executor = get_default_executor()
         executor.start()
@@ -499,12 +500,12 @@ def run(args, dag=None):
     if not args.pickle and not dag:
         dag = get_dag(args)
     elif not dag:
-        with db.create_session() as session:
+        with db.create_session(commit=False) as session:
             log.info('Loading pickle id %s', args.pickle)
             dag_pickle = session.query(DagPickle).filter(DagPickle.id == args.pickle).first()
-            if not dag_pickle:
-                raise AirflowException("Who hid the pickle!? [missing pickle]")
-            dag = dag_pickle.pickle
+        if not dag_pickle:
+            raise AirflowException("Who hid the pickle!? [missing pickle]")
+        dag = dag_pickle.pickle
 
     task = dag.get_task(task_id=args.task_id)
     ti = TaskInstance(task, args.execution_date)
@@ -1039,11 +1040,6 @@ def worker(args):
     env = os.environ.copy()
     env['AIRFLOW_HOME'] = settings.AIRFLOW_HOME
 
-    if not settings.validate_session():
-        log = LoggingMixin().log
-        log.error("Worker exiting... database connection precheck failed! ")
-        sys.exit(1)
-
     # Celery worker
     from airflow.executors.celery_executor import app as celery_app
     from celery.bin import worker
@@ -1148,7 +1144,7 @@ def connections(args):
             print(msg)
             return
 
-        with db.create_session() as session:
+        with db.create_session(commit=False) as session:
             conns = session.query(Connection.conn_id, Connection.conn_type,
                                   Connection.host, Connection.port,
                                   Connection.is_encrypted,

@@ -94,7 +94,7 @@ class BaseJob(Base, LoggingMixin):
         super(BaseJob, self).__init__(*args, **kwargs)
 
     @classmethod
-    @provide_session
+    @provide_session(commit=False)
     def most_recent_job(cls, session):  # type: (Session) -> Optional[BaseJob]
         """
         Return the most recent job of this type, if any, based on last
@@ -125,7 +125,7 @@ class BaseJob(Base, LoggingMixin):
             (conf.getint('scheduler', 'JOB_HEARTBEAT_SEC') * 2.1)
         )
 
-    @provide_session
+    @provide_session(commit=False)
     def kill(self, session=None):
         job = session.query(BaseJob).filter(BaseJob.id == self.id).first()
         job.end_date = timezone.utcnow()
@@ -166,10 +166,12 @@ class BaseJob(Base, LoggingMixin):
         sleep at all.
         """
         try:
-            with create_session() as session:
+            with create_session(commit=True) as session:
                 job = session.query(BaseJob).filter_by(id=self.id).one()
                 make_transient(job)
-                session.commit()
+        except OperationalError as e:
+            self.log.error("Scheduler heartbeat got an exception making job transient: %s", str(e))
+        try:
 
             if job.state == State.SHUTDOWN:
                 self.kill()
@@ -187,11 +189,10 @@ class BaseJob(Base, LoggingMixin):
                 sleep(sleep_for)
 
             # Update last heartbeat time
-            with create_session() as session:
+            with create_session(commit=True) as session:
                 job = session.query(BaseJob).filter(BaseJob.id == self.id).first()
                 job.latest_heartbeat = timezone.utcnow()
                 session.merge(job)
-                session.commit()
 
                 self.heartbeat_callback(session=session)
                 self.log.debug('[heartbeat]')
@@ -201,7 +202,7 @@ class BaseJob(Base, LoggingMixin):
     def run(self):
         Stats.incr(self.__class__.__name__.lower() + '_start', 1, 1)
         # Adding an entry in the DB
-        with create_session() as session:
+        with create_session(commit=False) as session:
             self.state = State.RUNNING
             session.add(self)
             session.commit()
@@ -229,7 +230,7 @@ class BaseJob(Base, LoggingMixin):
     def _execute(self):
         raise NotImplementedError("This method needs to be overridden")
 
-    @provide_session
+    @provide_session(commit=False)
     def reset_state_for_orphaned_tasks(self, filter_by_dag_run=None, session=None):
         """
         This function checks if there are any tasks in the dagrun (or all)

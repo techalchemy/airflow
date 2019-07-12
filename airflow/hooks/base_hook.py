@@ -78,7 +78,7 @@ class BaseHook(LoggingMixin):
 
     @classmethod
     def get_connection(cls, conn_id):  # type: (str) -> Connection
-        conn = random.choice(list(cls.get_connections(conn_id)))
+        conn = random.choice(cls.get_connections(conn_id))
         if conn.host:
             log = LoggingMixin().log
             log.info("Using connection to: %s", conn.debug_info())

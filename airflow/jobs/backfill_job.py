@@ -404,7 +404,7 @@ class BackfillJob(BaseJob):
             # or leaf to root, as otherwise tasks might be
             # determined deadlocked while they are actually
             # waiting for their upstream to finish
-            @provide_session
+            # @provide_session
             def _per_task_process(task, key, ti, session=None):
                 ti.refresh_from_db()
 
